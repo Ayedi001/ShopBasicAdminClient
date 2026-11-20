@@ -5,7 +5,7 @@ Full-stack fashion e-commerce platform for a Tunisian clothing shop. Customers b
 ## Stack
 
 - **Next.js 15** (App Router) + React 19 + TypeScript
-- **Prisma 6** + SQLite (dev) / PostgreSQL (production)
+- **Prisma 6** + **PostgreSQL** (required — use local Postgres or Vercel Prisma Postgres)
 - **Tailwind CSS 3**, Sharp image pipeline, Zod validation
 - bcrypt sessions, role-based permissions (Owner / Manager / Employee)
 - i18n: French, Arabic (RTL), English — TND currency
@@ -14,6 +14,7 @@ Full-stack fashion e-commerce platform for a Tunisian clothing shop. Customers b
 
 ```bash
 cp .env.example .env
+# Set DATABASE_URL to a PostgreSQL connection string (Docker, Neon, or Vercel pull)
 npm install
 npx prisma migrate deploy
 npm run db:seed
@@ -37,6 +38,33 @@ Default seeded owner (development only — set via `.env`):
 ```bash
 npm run admin:create -- --email you@shop.tn --password 'YourStrong1' --name "Propriétaire" --phone 98123456
 ```
+
+## Deploy on Vercel (+ Prisma Postgres)
+
+The app **requires PostgreSQL**. SQLite (`file:./dev.db`) does not work on Vercel.
+
+1. Import the GitHub repo into Vercel and deploy once (it may fail until the DB is connected — that is OK).
+2. In the Vercel project → **Storage** → create / connect **Prisma Postgres**.
+3. Confirm these env vars exist for Production (set by the integration):
+   - `DATABASE_URL` — direct URL (used by `prisma migrate deploy` at build)
+   - `DATABASE_URL_POOLED` — pooled URL (used by the running app)
+4. Also set manually:
+   - `APP_URL` = `https://your-app.vercel.app` (or your custom domain)
+   - `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` if you want the seed to create an owner (optional)
+5. **Redeploy** so the build runs `prisma migrate deploy` against the new database.
+6. Seed production once (from your machine, with the production `DATABASE_URL`):
+
+```bash
+npx vercel env pull .env.production.local
+# ensure DATABASE_URL points at the Vercel Prisma DB, then:
+npx dotenv -e .env.production.local -- npm run db:seed
+# or create only an admin:
+npx dotenv -e .env.production.local -- npm run admin:create -- --email you@shop.tn --password 'YourStrong1' --name "Marwen Ayedi" --phone 98123456
+```
+
+Without seeding (or `admin:create`), the site builds but the catalog/admin login will be empty.
+
+**Uploads:** product images written to disk do not persist on Vercel’s serverless filesystem. Use demo seed images carefully, or add Blob/S3 later.
 
 ## Scripts
 
@@ -68,30 +96,23 @@ npm run admin:create -- --email you@shop.tn --password 'YourStrong1' --name "Pro
 
 **Admin:** dashboard analytics, orders with status history & notes, products with variant matrix & image management, inventory movements, categories, promotions/coupons, homepage/banners, content pages, delivery regions, store settings, staff roles, audit log, CSV exports.
 
-## Switching to PostgreSQL
-
-1. Set `DATABASE_URL` to a Postgres connection string in `.env`.
-2. Ensure `prisma/schema.prisma` datasource provider is `postgresql` (or use Prisma multi-schema / env-based provider if you extend it).
-3. Run `npx prisma migrate deploy` then `npm run db:seed` (or `admin:create` only).
-
-SQLite is the default for zero-setup local development.
-
 ## Backup & restore
 
 ```bash
 npm run db:backup
-npm run db:backup -- --restore backups/maison-shop-….db   # SQLite
+npm run db:backup -- --restore backups/maison-shop-….sql
 ```
 
-For Postgres, `pg_dump` / `psql` must be on `PATH`.
+Requires `pg_dump` / `psql` on `PATH` for PostgreSQL.
 
 ## Environment
 
 See `.env.example`. Important keys:
 
-- `DATABASE_URL` — SQLite `file:./dev.db` or Postgres URL
+- `DATABASE_URL` — Postgres direct URL (migrations)
+- `DATABASE_URL_POOLED` — Postgres pooled URL (app; set automatically on Vercel)
 - `APP_URL` — public site URL (SEO, CSRF origin checks)
-- `UPLOAD_DIR` — local media storage
+- `UPLOAD_DIR` — local media storage (ephemeral on Vercel)
 - `SEED_ADMIN_*` — only used by seed / create-admin
 - `SEED_DEMO_DATA` — set `false` to skip demo products/orders
 

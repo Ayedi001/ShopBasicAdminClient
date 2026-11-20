@@ -2,9 +2,19 @@ import { PrismaClient } from "@prisma/client";
 
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
 
+/**
+ * On Vercel + Prisma Postgres, prefer the pooled URL for serverless traffic
+ * (DATABASE_URL_POOLED). Keep DATABASE_URL as the direct URL for
+ * `prisma migrate deploy` during build.
+ */
+function databaseUrl() {
+  return process.env.DATABASE_URL_POOLED || process.env.DATABASE_URL;
+}
+
 export const prisma =
   globalForPrisma.prisma ??
   new PrismaClient({
+    datasources: { db: { url: databaseUrl() } },
     log: process.env.NODE_ENV === "development" ? ["warn", "error"] : ["error"],
   });
 
@@ -15,9 +25,10 @@ export type Tx = Omit<PrismaClient, "$connect" | "$disconnect" | "$on" | "$trans
 export const isSqlite = () => (process.env.DATABASE_URL ?? "").startsWith("file:");
 
 /**
- * Case-insensitive "contains" filter that works on both SQLite (LIKE is
- * already case-insensitive for ASCII) and PostgreSQL (needs mode).
+ * Case-insensitive "contains" — PostgreSQL needs `mode: "insensitive"`.
+ * (SQLite local databases are no longer the supported path.)
  */
 export function icontains(value: string) {
-  return isSqlite() ? { contains: value } : { contains: value, mode: "insensitive" as const };
+  if (isSqlite()) return { contains: value };
+  return { contains: value, mode: "insensitive" as const };
 }

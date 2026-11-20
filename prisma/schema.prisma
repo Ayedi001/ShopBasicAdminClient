@@ -10,7 +10,9 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  // PostgreSQL for Vercel / Prisma Postgres. Local: use a Postgres DATABASE_URL
+  // (Docker, or `vercel env pull`) — SQLite is no longer supported.
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
