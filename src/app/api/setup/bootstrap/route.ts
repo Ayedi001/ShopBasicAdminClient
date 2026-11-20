@@ -1,9 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/server/db";
+import { CATEGORIES, COLORS, MATERIALS, PRODUCTS, SIZES } from "../../../../../prisma/seed/data";
+import { slugify } from "@/lib/utils";
+import { rebuildSearchText } from "@/server/products-admin";
+import { recomputeAllPricing } from "@/server/pricing";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
+
+const TND = (n: number) => Math.round(n * 1000);
 
 /**
  * One-shot production bootstrap. Remove this route after use.
@@ -58,60 +64,229 @@ export async function POST(req: NextRequest) {
     update: { passwordHash: customerHash, isActive: true },
   });
 
-  // Minimal store settings so the homepage does not crash
-  const store = await prisma.setting.findUnique({ where: { key: "store" } });
-  if (!store) {
-    await prisma.setting.create({
-      data: {
-        key: "store",
-        value: JSON.stringify({
-          name: "Maison Nour",
-          tagline: "Prêt-à-porter femme, homme et enfant",
-          primaryColor: "#141414",
-          accentColor: "#9a6b4b",
-          phone: "+21671000000",
-          whatsapp: "+21698000000",
-          email: "contact@maisonnour.tn",
-          address: "12 avenue Habib Bourguiba, 1001 Tunis",
-          openingHours: "Lundi – Samedi : 9h00 – 19h00",
-          social: { facebook: "", instagram: "", tiktok: "", youtube: "" },
-        }),
-      },
+  // Settings
+  const defaults: Record<string, unknown> = {
+    store: {
+      name: "Maison Nour",
+      tagline: "Prêt-à-porter femme, homme et enfant",
+      primaryColor: "#141414",
+      accentColor: "#9a6b4b",
+      phone: "+21671000000",
+      whatsapp: "+21698000000",
+      email: "contact@maisonnour.tn",
+      address: "12 avenue Habib Bourguiba, 1001 Tunis",
+      openingHours: "Lundi – Samedi : 9h00 – 19h00",
+      social: { facebook: "", instagram: "", tiktok: "", youtube: "" },
+    },
+    general: { defaultLocale: "fr", enabledLocales: ["fr", "ar", "en"], defaultCurrency: "TND", lowStockThreshold: 3 },
+    delivery: {
+      freeShippingThreshold: 150_000,
+      pickupEnabled: true,
+      estimatedDelivery: "24 à 72 heures",
+      paymentNote: "Paiement à la livraison (espèces).",
+    },
+  };
+  for (const [key, value] of Object.entries(defaults)) {
+    await prisma.setting.upsert({
+      where: { key },
+      create: { key, value: JSON.stringify(value) },
+      update: {},
     });
   }
-  for (const key of ["general", "delivery"] as const) {
-    const exists = await prisma.setting.findUnique({ where: { key } });
-    if (!exists) {
-      await prisma.setting.create({
-        data: {
-          key,
-          value: JSON.stringify(
-            key === "general"
-              ? { defaultLocale: "fr", enabledLocales: ["fr", "ar", "en"], defaultCurrency: "TND", lowStockThreshold: 3 }
-              : { freeShippingThreshold: 150_000, pickupEnabled: true, estimatedDelivery: "24 à 72 heures", paymentNote: "Paiement à la livraison (espèces)." },
-          ),
-        },
-      });
-    }
-  }
 
-  // Ensure Tunis region exists for checkout
   await prisma.deliveryRegion.upsert({
     where: { name: "Tunis" },
     create: { name: "Tunis", nameAr: "تونس", fee: 7000, estimatedDays: "24 h", sortOrder: 0, isActive: true },
     update: { isActive: true },
   });
+  await prisma.deliveryRegion.upsert({
+    where: { name: "Sfax" },
+    create: { name: "Sfax", nameAr: "صفاقس", fee: 8000, estimatedDays: "24 à 48 h", sortOrder: 1, isActive: true },
+    update: {},
+  });
 
-  const products = await prisma.product.count();
-  const categories = await prisma.category.count();
+  let catalogSeeded = false;
+  if ((await prisma.product.count()) === 0) {
+    catalogSeeded = true;
+
+    for (const [i, c] of COLORS.entries()) {
+      await prisma.color.upsert({
+        where: { slug: c.slug },
+        create: { slug: c.slug, name: c.name, nameAr: c.nameAr, nameEn: c.nameEn, hex: c.hex, sortOrder: i },
+        update: {},
+      });
+    }
+    for (const group of SIZES) {
+      for (const [i, label] of group.labels.entries()) {
+        const existing = await prisma.size.findFirst({ where: { type: group.type, label } });
+        if (!existing) await prisma.size.create({ data: { type: group.type, label, sortOrder: i } });
+      }
+    }
+    for (const [name, nameAr, nameEn] of MATERIALS) {
+      await prisma.material.upsert({
+        where: { name },
+        create: { name, nameAr, nameEn },
+        update: {},
+      });
+    }
+
+    for (const [i, cat] of CATEGORIES.entries()) {
+      const created = await prisma.category.upsert({
+        where: { slug: cat.slug },
+        create: {
+          slug: cat.slug,
+          name: cat.name,
+          nameAr: cat.nameAr,
+          nameEn: cat.nameEn,
+          audience: cat.audience,
+          sortOrder: i,
+          isActive: true,
+          imageUrl: `https://placehold.co/800x1000/141414/f5f5f5/png?text=${encodeURIComponent(cat.name)}`,
+        },
+        update: {},
+      });
+      for (const [j, sub] of cat.subs.entries()) {
+        await prisma.subcategory.upsert({
+          where: { categoryId_slug: { categoryId: created.id, slug: sub.slug } },
+          create: {
+            categoryId: created.id,
+            slug: sub.slug,
+            name: sub.name,
+            nameAr: sub.nameAr,
+            nameEn: sub.nameEn,
+            productType: sub.productType,
+            sizeType: sub.sizeType ?? "CLOTHING",
+            sortOrder: j,
+            isActive: true,
+          },
+          update: {},
+        });
+      }
+    }
+
+    // Seed a subset of products (enough for demo, fits serverless timeout)
+    const subset = PRODUCTS.slice(0, 18);
+    for (const [index, p] of subset.entries()) {
+      const category = await prisma.category.findUniqueOrThrow({ where: { slug: p.cat } });
+      const sub = await prisma.subcategory.findUniqueOrThrow({
+        where: { categoryId_slug: { categoryId: category.id, slug: p.sub } },
+      });
+      const colors = await prisma.color.findMany({ where: { slug: { in: p.colors } } });
+      const sizes = p.sizes
+        ? await prisma.size.findMany({ where: { type: p.sizes.type, label: { in: p.sizes.labels } } })
+        : [];
+
+      const price = TND(p.price);
+      const salePrice = p.sale != null ? TND(p.sale) : null;
+      const audience = p.audience ?? (p.cat === "femme" ? "WOMEN" : p.cat === "enfant" ? "KIDS" : "MEN");
+      const slug = slugify(`${p.name}-${audience === "BABY" ? "bebe" : p.cat}`);
+      const cover = `https://placehold.co/900x1200/${(colors[0]?.hex ?? "141414").replace("#", "")}/f8f8f8/png?text=${encodeURIComponent(p.name)}`;
+      const sku = p.sku ?? `SKU-${index + 1}`;
+
+      const product = await prisma.product.create({
+        data: {
+          slug,
+          sku,
+          name: p.name,
+          shortDescription: p.short,
+          description: p.desc,
+          audience,
+          categoryId: category.id,
+          subcategoryId: sub.id,
+          price,
+          salePrice,
+          status: "PUBLISHED",
+          isNewArrival: !!p.flags?.new,
+          isBestSeller: !!p.flags?.best,
+          isFeatured: !!p.flags?.featured || index < 6,
+          isOnSale: salePrice != null,
+          careInstructions: p.care || "Lavage délicat à 30°C.",
+          publishedAt: new Date(),
+          translations: {
+            create: [
+              { locale: "fr", name: p.name, shortDescription: p.short, description: p.desc },
+              { locale: "en", name: p.nameEn, shortDescription: p.short, description: p.descEn },
+              { locale: "ar", name: p.nameAr, shortDescription: p.short, description: p.descAr },
+            ],
+          },
+          images: {
+            create: [{ url: cover, thumbUrl: cover, storageKey: `bootstrap/${slug}`, sortOrder: 0, isMain: true, view: "FRONT", width: 900, height: 1200 }],
+          },
+          materials: {
+            create: p.materials.map(([materialName, percentage]) => ({
+              percentage,
+              material: { connect: { name: materialName } },
+            })),
+          },
+        },
+      });
+
+      const colorList = colors.length ? colors : [null];
+      const sizeList = sizes.length ? sizes : [null];
+      let v = 0;
+      for (const color of colorList) {
+        for (const size of sizeList) {
+          const stock = 5 + ((index + v) % 8);
+          const colorId = color?.id ?? null;
+          const sizeId = size?.id ?? null;
+          await prisma.productVariant.create({
+            data: {
+              productId: product.id,
+              colorId,
+              sizeId,
+              variantKey: `${colorId ?? "-"}:${sizeId ?? "-"}`,
+              sku: `${sku}-${color?.slug ?? "x"}-${size?.label?.replace(/\s+/g, "") ?? "u"}`.slice(0, 40),
+              price,
+              salePrice,
+              stock,
+              reserved: 0,
+              available: stock,
+              isActive: true,
+            },
+          });
+          v += 1;
+        }
+      }
+      await rebuildSearchText(product.id);
+    }
+
+    // Homepage sections
+    if ((await prisma.homeSection.count()) === 0) {
+      const sections = [
+        { type: "HERO", title: "Nouvelle saison", sortOrder: 0 },
+        { type: "CATEGORY_TILES", title: "Collections", sortOrder: 10 },
+        { type: "NEW_ARRIVALS", title: "Nouveautés", sortOrder: 20, config: { limit: 8 } },
+        { type: "BEST_SELLERS", title: "Meilleures ventes", sortOrder: 30, config: { limit: 8 } },
+        { type: "ON_SALE", title: "Promotions", sortOrder: 40, config: { limit: 8 } },
+      ];
+      for (const s of sections) {
+        await prisma.homeSection.create({
+          data: {
+            type: s.type,
+            title: s.title,
+            sortOrder: s.sortOrder,
+            isVisible: true,
+            config: JSON.stringify(s.config ?? {}),
+          },
+        });
+      }
+    }
+
+    await recomputeAllPricing();
+  }
 
   return NextResponse.json({
     ok: true,
-    message: products === 0 ? "Accounts created. Catalog is empty — run full seed from CI or paste DATABASE_URL locally for demo products." : "Accounts ready.",
+    message: catalogSeeded ? "Accounts + demo catalog created." : "Accounts ready (catalog already present).",
     accounts: {
-      admin: { email: adminEmail, password: adminPass, id: admin.id },
-      customer: { email: customerEmail, password: customerPass, id: customer.id },
+      admin: { email: adminEmail, password: adminPass, login: "/admin/login" },
+      customer: { email: customerEmail, password: customerPass, login: "/login" },
     },
-    counts: { products, categories, users: await prisma.user.count() },
+    counts: {
+      products: await prisma.product.count(),
+      categories: await prisma.category.count(),
+      users: await prisma.user.count(),
+    },
+    site: process.env.APP_URL || "https://shop-basic-admin-client.vercel.app",
   });
 }
