@@ -7,7 +7,6 @@ import { ChevronDown, Heart, Menu, Phone, Search, ShoppingBag, User, X } from "l
 import type { NavCategory } from "@/server/catalog";
 import { useStore } from "./store-provider";
 import { SearchPanel } from "./search-box";
-import { SafeImage } from "./safe-image";
 import { LOCALE_LABELS } from "@/i18n";
 import { cn } from "@/lib/utils";
 
@@ -75,12 +74,14 @@ export function Header({ nav, logoUrl, announcement, phone, phoneDisplay, locale
 
   useEffect(() => {
     document.body.style.overflow = mobileOpen ? "hidden" : "";
+    return () => {
+      document.body.style.overflow = "";
+    };
   }, [mobileOpen]);
 
   const extraLinks = [
     { href: "/shop?new=1&sort=newest", label: t("common.newArrivals") },
     { href: "/shop?sale=1", label: t("common.onSale"), accent: true },
-    { href: "/collections", label: t("common.collections") },
   ];
 
   return (
@@ -156,12 +157,18 @@ export function Header({ nav, logoUrl, announcement, phone, phoneDisplay, locale
               <User className="h-5 w-5" strokeWidth={1.6} />
               {unread > 0 && <span className="absolute end-1 top-1 h-2 w-2 rounded-full bg-sale" />}
             </Link>
-            <Link href="/account/wishlist" className="relative p-2 hover:opacity-70" aria-label={t("common.wishlist")}>
-              <Heart className="h-5 w-5" strokeWidth={1.6} />
-              {wishlist.size > 0 && (
-                <span className="absolute -end-0.5 top-0 flex h-4 min-w-4 items-center justify-center rounded-full bg-brand px-1 text-[10px] text-white">{wishlist.size}</span>
-              )}
-            </Link>
+            {!user?.isStaff && (
+              <Link
+                href={user ? "/account/wishlist" : "/login?next=/account/wishlist"}
+                className="relative p-2 hover:opacity-70"
+                aria-label={t("common.wishlist")}
+              >
+                <Heart className="h-5 w-5" strokeWidth={1.6} />
+                {wishlist.size > 0 && (
+                  <span className="absolute -end-0.5 top-0 flex h-4 min-w-4 items-center justify-center rounded-full bg-brand px-1 text-[10px] text-white">{wishlist.size}</span>
+                )}
+              </Link>
+            )}
             <button onClick={() => setCartOpen(true)} className="relative p-2 hover:opacity-70" aria-label={`${t("common.cart")} (${cartCount})`}>
               <ShoppingBag className="h-5 w-5" strokeWidth={1.6} />
               {cartCount > 0 && (
@@ -171,27 +178,18 @@ export function Header({ nav, logoUrl, announcement, phone, phoneDisplay, locale
           </div>
         </div>
 
-        {/* Mega menu */}
+        {/* Compact category dropdown */}
         {mega && (
           <div className="absolute inset-x-0 top-full hidden animate-fadeIn border-b border-neutral-200 bg-white shadow-sm lg:block">
             {nav
               .filter((c) => c.slug === mega)
               .map((c) => (
-                <div key={c.slug} className="container-x grid grid-cols-[1fr_320px] gap-10 py-8">
-                  <div>
-                    <Link href={`/c/${c.slug}`} className="eyebrow mb-4 inline-block hover:text-ink">
+                <div key={c.slug} className="container-x py-6">
+                  <div className="mb-4 flex items-center justify-between">
+                    <Link href={`/c/${c.slug}`} className="eyebrow hover:text-ink">
                       {t("common.viewAll")} — {c.name}
                     </Link>
-                    <ul className="grid grid-cols-3 gap-x-8 gap-y-2.5">
-                      {c.subcategories.map((s) => (
-                        <li key={s.slug}>
-                          <Link href={`/c/${c.slug}/${s.slug}`} className="text-[15px] text-neutral-700 hover:text-ink hover:underline">
-                            {s.name}
-                          </Link>
-                        </li>
-                      ))}
-                    </ul>
-                    <div className="mt-6 flex gap-6 text-[13px]">
+                    <div className="flex gap-5 text-[13px]">
                       <Link href={`/c/${c.slug}?new=1&sort=newest`} className="link-underline">
                         {t("common.newArrivals")}
                       </Link>
@@ -200,12 +198,15 @@ export function Header({ nav, logoUrl, announcement, phone, phoneDisplay, locale
                       </Link>
                     </div>
                   </div>
-                  {c.imageUrl && (
-                    <Link href={`/c/${c.slug}`} className="group relative block aspect-[4/3] overflow-hidden">
-                      <SafeImage src={c.imageUrl} alt={c.name} className="h-full w-full object-cover transition duration-700 group-hover:scale-105" />
-                      <span className="absolute bottom-3 start-3 bg-white px-3 py-1.5 text-[12px] uppercase tracking-wider">{t("home.shopCategory", { name: c.name })}</span>
-                    </Link>
-                  )}
+                  <ul className="grid grid-cols-4 gap-x-6 gap-y-2">
+                    {c.subcategories.map((s) => (
+                      <li key={s.slug}>
+                        <Link href={`/c/${c.slug}/${s.slug}`} className="text-[14px] text-neutral-700 hover:text-ink hover:underline">
+                          {s.name}
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
               ))}
           </div>

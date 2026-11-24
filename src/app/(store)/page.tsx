@@ -4,7 +4,6 @@ import { prisma } from "@/server/db";
 import { getI18n } from "@/server/i18n";
 import { getNavigation, getProductCards, type ProductCardDTO } from "@/server/catalog";
 import { ensurePricingFresh } from "@/server/pricing";
-import { getSetting } from "@/server/settings";
 import { localized, localizedField } from "@/i18n";
 import { safeHref, safeJson } from "@/lib/utils";
 import { HeroCarousel } from "@/components/store/hero-carousel";
@@ -35,7 +34,7 @@ export default async function HomePage() {
   await ensurePricingFresh();
   const { locale, t } = await getI18n();
   const now = new Date();
-  const [sections, banners, nav, collections, store] = await Promise.all([
+  const [sections, banners, nav, collections] = await Promise.all([
     prisma.homeSection.findMany({ where: { isVisible: true }, orderBy: { sortOrder: "asc" } }),
     prisma.banner.findMany({
       where: { isActive: true, AND: [{ OR: [{ startsAt: null }, { startsAt: { lte: now } }] }, { OR: [{ endsAt: null }, { endsAt: { gte: now } }] }] },
@@ -43,7 +42,6 @@ export default async function HomePage() {
     }),
     getNavigation(locale),
     prisma.collection.findMany({ where: { isActive: true, isFeatured: true }, orderBy: { sortOrder: "asc" }, take: 4 }),
-    getSetting("store"),
   ]);
 
   const field = (b: { [k: string]: unknown }, base: string) =>
@@ -54,15 +52,15 @@ export default async function HomePage() {
       const config = safeJson<{ limit?: number; link?: string; cta?: string }>(s.config, {});
       const title = localizedField(s.title, s.titleAr, s.titleEn, locale);
       const subtitle = localizedField(s.subtitle, s.subtitleAr, s.subtitleEn, locale) || null;
-      const limit = Math.min(12, config.limit ?? 8);
+      const limit = Math.min(4, config.limit ?? 4);
       const rail = async (cards: Promise<ProductCardDTO[]>, href: string, fallbackTitle: string) => {
         const items = await cards;
         if (!items.length) return null;
         return (
-          <section key={s.id} className="container-x py-12 lg:py-16">
+          <section key={s.id} className="container-x py-10 lg:py-12">
             <SectionHeader title={title || fallbackTitle} subtitle={subtitle} href={href} cta={t("common.viewAll")} />
             <ProductRail products={items.slice(0, limit)} />
-            <Link href={href} className="btn-outline mt-8 w-full sm:hidden">
+            <Link href={href} className="btn-outline mt-6 w-full sm:hidden">
               {t("common.viewAll")}
             </Link>
           </section>
@@ -136,39 +134,20 @@ export default async function HomePage() {
             </section>
           );
         case "PROMO_TEXT": {
-          const promo = banners.find((b) => b.placement === "PROMO");
+          if (!title) return null;
           return (
-            <section key={s.id} className="py-6">
-              {promo && (
-                <div className="container-x mb-10 grid items-center gap-8 md:grid-cols-2">
-                  <Link href={safeHref(promo.linkUrl)} className="group block aspect-[4/3] overflow-hidden bg-neutral-100">
-                    <SafeImage src={promo.imageUrl} alt={field(promo, "title")} className="h-full w-full object-cover transition duration-700 group-hover:scale-105" />
-                  </Link>
-                  <div className="md:px-10">
-                    <p className="eyebrow mb-3">{store.name}</p>
-                    <h2 className="h-display text-4xl lg:text-5xl">{field(promo, "title")}</h2>
-                    {field(promo, "subtitle") && <p className="mt-4 max-w-md text-ink-muted">{field(promo, "subtitle")}</p>}
-                    {field(promo, "ctaLabel") && (
-                      <Link href={safeHref(promo.linkUrl)} className="btn-primary mt-7">
-                        {field(promo, "ctaLabel")}
-                      </Link>
-                    )}
-                  </div>
+            <section key={s.id} className="py-4">
+              <div className="bg-brand-soft">
+                <div className="container-x flex flex-col items-center gap-2.5 py-10 text-center">
+                  <h2 className="h-display text-2xl sm:text-3xl">{title}</h2>
+                  {subtitle && <p className="max-w-xl text-sm text-ink-muted">{subtitle}</p>}
+                  {config.link && (
+                    <Link href={safeHref(config.link)} className="link-underline mt-1 text-[13px] font-medium uppercase tracking-[0.12em]">
+                      {config.cta || t("home.shopNow")}
+                    </Link>
+                  )}
                 </div>
-              )}
-              {title && (
-                <div className="bg-brand-soft">
-                  <div className="container-x flex flex-col items-center gap-3 py-12 text-center">
-                    <h2 className="h-display text-3xl sm:text-4xl">{title}</h2>
-                    {subtitle && <p className="max-w-xl text-ink-muted">{subtitle}</p>}
-                    {config.link && (
-                      <Link href={safeHref(config.link)} className="link-underline mt-2 text-[13px] font-medium uppercase tracking-[0.12em]">
-                        {config.cta || t("home.shopNow")}
-                      </Link>
-                    )}
-                  </div>
-                </div>
-              )}
+              </div>
             </section>
           );
         }

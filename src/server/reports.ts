@@ -16,7 +16,8 @@ function startOf(period: Period, d = new Date()) {
 }
 
 export async function dashboardOverview() {
-  const [byStatus, customers, products, recentOrders, revenueAgg, pipelineAgg, pendingReturns, pendingReviews, lowStock] = await Promise.all([
+  const { lowStockThreshold } = await getSetting("general");
+  const [byStatus, customers, products, recentOrders, revenueAgg, pipelineAgg, pendingReturns, pendingReviews, lowStock, lowStockCount] = await Promise.all([
     prisma.order.groupBy({ by: ["status"], _count: true }),
     prisma.user.count({ where: { role: "CUSTOMER" } }),
     prisma.product.count({ where: { status: { not: "ARCHIVED" } } }),
@@ -26,6 +27,7 @@ export async function dashboardOverview() {
     prisma.returnRequest.count({ where: { status: "REQUESTED" } }),
     prisma.review.count({ where: { status: "PENDING" } }),
     lowStockVariants(10),
+    prisma.productVariant.count({ where: { isActive: true, available: { lte: lowStockThreshold }, product: { status: { not: "ARCHIVED" } } } }),
   ]);
   const count = (s: string) => byStatus.find((b) => b.status === s)?._count ?? 0;
   return {
@@ -46,6 +48,7 @@ export async function dashboardOverview() {
     pendingReturns,
     pendingReviews,
     lowStock,
+    lowStockCount,
   };
 }
 

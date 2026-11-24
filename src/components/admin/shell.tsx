@@ -7,6 +7,7 @@ import {
   BarChart3,
   Bell,
   Boxes,
+  ChevronDown,
   ClipboardList,
   ExternalLink,
   FileText,
@@ -38,46 +39,29 @@ import { AdminToaster } from "./ui";
 
 type Item = { href: string; label: string; icon: typeof Home; perm: Permission; badge?: keyof AdminAlerts; exact?: boolean };
 
-const NAV: { title: string; items: Item[] }[] = [
-  {
-    title: "Ventes",
-    items: [
-      { href: "/admin", label: "Tableau de bord", icon: LayoutDashboard, perm: "dashboard.view", exact: true },
-      { href: "/admin/orders", label: "Commandes", icon: ClipboardList, perm: "orders.view", badge: "pendingOrders" },
-      { href: "/admin/returns", label: "Retours & échanges", icon: RotateCcw, perm: "returns.manage", badge: "pendingReturns" },
-      { href: "/admin/customers", label: "Clients", icon: Users, perm: "customers.view" },
-      { href: "/admin/messages", label: "Messages", icon: Mail, perm: "customers.view", badge: "unreadMessages" },
-    ],
-  },
-  {
-    title: "Catalogue",
-    items: [
-      { href: "/admin/products", label: "Produits", icon: Shirt, perm: "products.manage" },
-      { href: "/admin/inventory", label: "Stock", icon: Boxes, perm: "inventory.manage", badge: "lowStock" },
-      { href: "/admin/categories", label: "Catégories", icon: FolderTree, perm: "categories.manage" },
-      { href: "/admin/attributes", label: "Couleurs, tailles…", icon: Palette, perm: "categories.manage" },
-      { href: "/admin/size-charts", label: "Guides des tailles", icon: Ruler, perm: "categories.manage" },
-      { href: "/admin/reviews", label: "Avis clients", icon: Star, perm: "reviews.manage", badge: "pendingReviews" },
-    ],
-  },
-  {
-    title: "Marketing & contenu",
-    items: [
-      { href: "/admin/promotions", label: "Promotions & coupons", icon: Percent, perm: "promotions.manage" },
-      { href: "/admin/homepage", label: "Page d'accueil", icon: Home, perm: "content.manage" },
-      { href: "/admin/pages", label: "Pages de contenu", icon: FileText, perm: "content.manage" },
-    ],
-  },
-  {
-    title: "Pilotage",
-    items: [
-      { href: "/admin/reports", label: "Rapports & exports", icon: BarChart3, perm: "reports.view" },
-      { href: "/admin/delivery", label: "Livraison", icon: Truck, perm: "settings.manage" },
-      { href: "/admin/settings", label: "Paramètres", icon: Settings, perm: "settings.manage" },
-      { href: "/admin/staff", label: "Équipe & rôles", icon: UserCog, perm: "staff.manage" },
-      { href: "/admin/audit", label: "Journal d'audit", icon: ScrollText, perm: "audit.view" },
-    ],
-  },
+const CORE_NAV: Item[] = [
+  { href: "/admin", label: "Tableau de bord", icon: LayoutDashboard, perm: "dashboard.view", exact: true },
+  { href: "/admin/orders", label: "Commandes", icon: ClipboardList, perm: "orders.view", badge: "pendingOrders" },
+  { href: "/admin/products", label: "Produits", icon: Shirt, perm: "products.manage" },
+  { href: "/admin/inventory", label: "Stock", icon: Boxes, perm: "inventory.manage", badge: "lowStock" },
+  { href: "/admin/customers", label: "Clients", icon: Users, perm: "customers.view" },
+  { href: "/admin/returns", label: "Retours & échanges", icon: RotateCcw, perm: "returns.manage", badge: "pendingReturns" },
+  { href: "/admin/messages", label: "Messages", icon: Mail, perm: "customers.view", badge: "unreadMessages" },
+];
+
+const MORE_NAV: Item[] = [
+  { href: "/admin/categories", label: "Catégories", icon: FolderTree, perm: "categories.manage" },
+  { href: "/admin/attributes", label: "Couleurs, tailles…", icon: Palette, perm: "categories.manage" },
+  { href: "/admin/size-charts", label: "Guides des tailles", icon: Ruler, perm: "categories.manage" },
+  { href: "/admin/reviews", label: "Avis clients", icon: Star, perm: "reviews.manage", badge: "pendingReviews" },
+  { href: "/admin/promotions", label: "Promotions & coupons", icon: Percent, perm: "promotions.manage" },
+  { href: "/admin/homepage", label: "Page d'accueil", icon: Home, perm: "content.manage" },
+  { href: "/admin/pages", label: "Pages de contenu", icon: FileText, perm: "content.manage" },
+  { href: "/admin/reports", label: "Rapports & exports", icon: BarChart3, perm: "reports.view" },
+  { href: "/admin/delivery", label: "Livraison", icon: Truck, perm: "settings.manage" },
+  { href: "/admin/settings", label: "Paramètres", icon: Settings, perm: "settings.manage" },
+  { href: "/admin/staff", label: "Équipe & rôles", icon: UserCog, perm: "staff.manage" },
+  { href: "/admin/audit", label: "Journal d'audit", icon: ScrollText, perm: "audit.view" },
 ];
 
 const BELL_ITEMS: { key: keyof AdminAlerts; label: string; href: string }[] = [
@@ -147,40 +131,59 @@ export function AdminShell({
   const visible = (p: Permission) => user.permissions.includes(p);
   const totalAlerts = BELL_ITEMS.reduce((s, b) => s + (visible(permFor(b.key)) ? Number(alerts[b.key]) || 0 : 0), 0);
 
+  const coreItems = CORE_NAV.filter((i) => visible(i.perm));
+  const moreItems = MORE_NAV.filter((i) => visible(i.perm));
+  const isMoreActive = moreItems.some((i) => pathname === i.href || pathname.startsWith(i.href + "/"));
+  const [moreOpen, setMoreOpen] = useState(isMoreActive);
+
+  useEffect(() => {
+    if (isMoreActive) setMoreOpen(true);
+  }, [isMoreActive]);
+
+  const renderItem = ({ href, label, icon: Icon, badge, exact }: Item) => {
+    const active = exact ? pathname === href : pathname === href || pathname.startsWith(href + "/");
+    const count = badge ? Number(alerts[badge]) || 0 : 0;
+    return (
+      <li key={href}>
+        <Link
+          href={href}
+          className={cn(
+            "flex items-center gap-2.5 rounded-md px-2 py-1.5 text-[13px] transition",
+            active ? "bg-white/10 font-medium text-white" : "text-neutral-300 hover:bg-white/5 hover:text-white",
+          )}
+        >
+          <Icon className="h-4 w-4 shrink-0" strokeWidth={1.75} />
+          <span className="truncate">{label}</span>
+          {count > 0 && (
+            <span className={cn("ml-auto rounded-full px-1.5 text-[10px] font-semibold", badge === "lowStock" ? "bg-amber-500/90 text-black" : "bg-red-500 text-white")}>{count}</span>
+          )}
+        </Link>
+      </li>
+    );
+  };
+
   const nav = (
     <nav className="flex-1 space-y-5 overflow-y-auto px-3 py-4">
-      {NAV.map((group) => {
-        const items = group.items.filter((i) => visible(i.perm));
-        if (!items.length) return null;
-        return (
-          <div key={group.title}>
-            <p className="px-2 pb-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-neutral-500">{group.title}</p>
-            <ul className="space-y-0.5">
-              {items.map(({ href, label, icon: Icon, badge, exact }) => {
-                const active = exact ? pathname === href : pathname === href || pathname.startsWith(href + "/");
-                const count = badge ? Number(alerts[badge]) || 0 : 0;
-                return (
-                  <li key={href}>
-                    <Link
-                      href={href}
-                      className={cn(
-                        "flex items-center gap-2.5 rounded-md px-2 py-1.5 text-[13px] transition",
-                        active ? "bg-white/10 font-medium text-white" : "text-neutral-300 hover:bg-white/5 hover:text-white",
-                      )}
-                    >
-                      <Icon className="h-4 w-4 shrink-0" strokeWidth={1.75} />
-                      <span className="truncate">{label}</span>
-                      {count > 0 && (
-                        <span className={cn("ml-auto rounded-full px-1.5 text-[10px] font-semibold", badge === "lowStock" ? "bg-amber-500/90 text-black" : "bg-red-500 text-white")}>{count}</span>
-                      )}
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        );
-      })}
+      {coreItems.length > 0 && (
+        <div>
+          <p className="px-2 pb-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-neutral-500">Principal</p>
+          <ul className="space-y-0.5">{coreItems.map(renderItem)}</ul>
+        </div>
+      )}
+      {moreItems.length > 0 && (
+        <div>
+          <button
+            type="button"
+            onClick={() => setMoreOpen((v) => !v)}
+            className="flex w-full items-center justify-between px-2 pb-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-neutral-400 hover:text-white"
+            aria-expanded={moreOpen}
+          >
+            <span>Configuration & plus</span>
+            <ChevronDown className={cn("h-3.5 w-3.5 transition", moreOpen && "rotate-180")} />
+          </button>
+          {moreOpen && <ul className="space-y-0.5">{moreItems.map(renderItem)}</ul>}
+        </div>
+      )}
     </nav>
   );
 

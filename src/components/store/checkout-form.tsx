@@ -46,7 +46,6 @@ export function CheckoutForm({
   const [form, setForm] = useState({ ...initial, deliveryMethod: "DELIVERY" as "DELIVERY" | "PICKUP", saveAddress: true });
   const [quote, setQuote] = useState<Quote | null>(null);
   const [loadingQuote, setLoadingQuote] = useState(true);
-  const [step, setStep] = useState<"details" | "review">("details");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fields, setFields] = useState<Record<string, string>>({});
@@ -84,22 +83,15 @@ export function CheckoutForm({
     return Object.keys(errs).length === 0;
   };
 
-  const toReview = (e: React.FormEvent) => {
+  const submitOrder = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    if (!validate()) return;
-    if (quote?.shippingError) {
+    if (!validate() || !quote) return;
+    if (quote.shippingError) {
       setFields({ regionId: quote.shippingError });
       return;
     }
-    setStep("review");
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  };
-
-  const place = async () => {
-    if (!quote) return;
     setBusy(true);
-    setError(null);
     try {
       const r = await post<{ number: string }>("/api/checkout/place", {
         fullName: form.fullName,
@@ -116,21 +108,20 @@ export function CheckoutForm({
       });
       await refreshCart();
       router.push(`/checkout/success/${r.number}`);
-    } catch (e) {
+    } catch (err) {
       setBusy(false);
-      if (e instanceof ApiError) {
-        if (["TOTAL_CHANGED", "CART_CHANGED", "OUT_OF_STOCK"].includes(e.code)) {
+      if (err instanceof ApiError) {
+        if (["TOTAL_CHANGED", "CART_CHANGED", "OUT_OF_STOCK"].includes(err.code)) {
           await loadQuote();
           await refreshCart();
-          setError(e.code === "TOTAL_CHANGED" ? t("checkout.totalChanged") : e.message);
+          setError(err.code === "TOTAL_CHANGED" ? t("checkout.totalChanged") : err.message);
           return;
         }
-        if (e.fields) {
-          setFields(resolveFieldErrors(e.fields, t));
-          setStep("details");
+        if (err.fields) {
+          setFields(resolveFieldErrors(err.fields, t));
         }
       }
-      setError(errorMessage(e, t));
+      setError(errorMessage(err, t));
     }
   };
 
@@ -204,68 +195,8 @@ export function CheckoutForm({
     </aside>
   );
 
-  if (step === "review" && quote) {
-    return (
-      <div className="grid gap-10 lg:grid-cols-[1fr_400px]">
-        <div className="space-y-6">
-          <h1 className="h-display text-4xl">{t("checkout.reviewTitle")}</h1>
-          <FormAlert message={error} />
-          <div className="flex gap-3 border border-brand-accent/40 bg-brand-soft p-4 text-[14px]">
-            <Phone className="mt-0.5 h-5 w-5 shrink-0 text-brand-accent" />
-            <p>{t("checkout.reviewText")}</p>
-          </div>
-          <section className="border border-neutral-200 p-5">
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-[13px] font-medium uppercase tracking-[0.14em]">{t("checkout.deliverTo")}</h2>
-              <button onClick={() => setStep("details")} className="text-[13px] underline underline-offset-4">
-                {t("checkout.editInfo")}
-              </button>
-            </div>
-            <p className="font-medium">{form.fullName}</p>
-            <p dir="ltr" className="text-ink-muted rtl:text-end">
-              {form.phone}
-            </p>
-            {form.deliveryMethod === "DELIVERY" ? (
-              <p className="mt-2 text-neutral-700">
-                {form.address}
-                <br />
-                {form.city}
-                {form.postalCode ? ` ${form.postalCode}` : ""}, {region ? (locale === "ar" && region.nameAr ? region.nameAr : region.name) : ""}
-              </p>
-            ) : (
-              <p className="mt-2 text-neutral-700">{t("checkout.pickupAt", { address: pickupAddress })}</p>
-            )}
-            {form.deliveryInstructions && <p className="mt-2 text-[14px] italic text-ink-muted">“{form.deliveryInstructions}”</p>}
-          </section>
-          <section className="border border-neutral-200 p-5">
-            <h2 className="mb-2 text-[13px] font-medium uppercase tracking-[0.14em]">{t("checkout.paymentMethod")}</h2>
-            <p className="text-neutral-700">{paymentNote}</p>
-          </section>
-          <button onClick={place} disabled={busy || loadingQuote || !!unavailable || !!quote.shippingError} className="btn-primary h-14 w-full text-[14px]">
-            {busy ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" /> {t("checkout.placing")}
-              </>
-            ) : (
-              `${t("checkout.placeOrder")} — ${money(quote.total)}`
-            )}
-          </button>
-          {unavailable && (
-            <p className="flex items-center gap-2 text-[14px] text-sale">
-              <AlertTriangle className="h-4 w-4" /> {t("cart.itemUnavailable")}{" "}
-              <Link href="/cart" className="underline">
-                {t("common.cart")}
-              </Link>
-            </p>
-          )}
-        </div>
-        {summary}
-      </div>
-    );
-  }
-
   return (
-    <form onSubmit={toReview} className="grid gap-10 lg:grid-cols-[1fr_400px]" noValidate>
+    <form onSubmit={submitOrder} className="grid gap-10 lg:grid-cols-[1fr_400px]" noValidate>
       <div className="space-y-8">
         <h1 className="h-display text-4xl">{t("checkout.title")}</h1>
         <FormAlert message={error} />
@@ -329,13 +260,33 @@ export function CheckoutForm({
             </p>
           )}
         </section>
-        <section>
-          <h2 className="mb-2 text-[13px] font-medium uppercase tracking-[0.14em]">3. {t("checkout.paymentMethod")}</h2>
+        <section className="space-y-3">
+          <h2 className="text-[13px] font-medium uppercase tracking-[0.14em]">3. {t("checkout.paymentMethod")}</h2>
           <p className="border border-neutral-200 p-4 text-[14px] text-neutral-700">{paymentNote}</p>
+          <div className="flex gap-3 border border-brand-accent/40 bg-brand-soft p-4 text-[13px]">
+            <Phone className="mt-0.5 h-4 w-4 shrink-0 text-brand-accent" />
+            <p>{t("checkout.reviewText")}</p>
+          </div>
         </section>
-        <button className="btn-primary h-14 w-full text-[14px]" disabled={loadingQuote && !quote}>
-          {t("checkout.review")}
+        <button className="btn-primary h-14 w-full text-[14px]" disabled={busy || loadingQuote || !quote || !!unavailable || !!quote.shippingError}>
+          {busy ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" /> {t("checkout.placing")}
+            </>
+          ) : quote ? (
+            `${t("checkout.placeOrder")} — ${money(quote.total)}`
+          ) : (
+            t("checkout.placeOrder")
+          )}
         </button>
+        {unavailable && (
+          <p className="flex items-center gap-2 text-[14px] text-sale">
+            <AlertTriangle className="h-4 w-4" /> {t("cart.itemUnavailable")}{" "}
+            <Link href="/cart" className="underline">
+              {t("common.cart")}
+            </Link>
+          </p>
+        )}
       </div>
       {summary}
     </form>

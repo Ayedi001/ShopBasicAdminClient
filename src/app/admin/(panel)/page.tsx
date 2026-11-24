@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { adminPage } from "@/server/admin-guard";
-import { dashboardOverview, outOfStockProducts, salesSeries, type Period } from "@/server/reports";
+import { dashboardOverview, salesSeries, type Period } from "@/server/reports";
 import { Badge, Card, ColorDot, Empty, PageHeader, Stat, dt, fdatetime } from "@/components/admin/parts";
 import { BarChart } from "@/components/admin/charts";
 import { ORDER_STATUS_LABELS } from "@/components/admin/labels";
@@ -32,7 +32,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   }
 
   const period = (PERIODS.some((p) => p.key === sp.period) ? sp.period : "day") as Period;
-  const [o, series, outOfStock] = await Promise.all([dashboardOverview(), salesSeries(period), outOfStockProducts()]);
+  const [o, series] = await Promise.all([dashboardOverview(), salesSeries(period)]);
   const canOrders = user.permissions.includes("orders.view");
   const canStock = user.permissions.includes("inventory.manage");
 
@@ -41,51 +41,23 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       <PageHeader title={`Bonjour ${user.fullName.split(" ")[0]}`} description="Vue d'ensemble de la boutique. Le chiffre d'affaires ne compte que les commandes livrées." />
       {denied && <DeniedBanner label={denied} />}
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-        <Stat label="Commandes" value={o.totalOrders} href={canOrders ? "/admin/orders" : undefined} />
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat label="À confirmer" value={o.pending} tone={o.pending ? "warn" : undefined} hint="à appeler" href={canOrders ? "/admin/orders?status=PENDING" : undefined} />
-        <Stat label="Confirmées / en préparation" value={o.confirmed + o.preparing} href={canOrders ? "/admin/orders?status=CONFIRMED" : undefined} />
-        <Stat label="Expédiées" value={o.shipped} href={canOrders ? "/admin/orders?status=SHIPPED" : undefined} />
-        <Stat label="Livrées" value={o.delivered} tone="ok" href={canOrders ? "/admin/orders?status=DELIVERED" : undefined} />
-        <Stat label="Annulées" value={o.cancelled} href={canOrders ? "/admin/orders?status=CANCELLED" : undefined} />
-        <Stat label="Chiffre d'affaires (livré)" value={dt(o.revenue)} tone="ok" />
-        <Stat label="En cours (non livré)" value={dt(o.pipeline)} hint={`${o.pipelineCount} commande(s)`} />
-        <Stat label="Panier moyen" value={dt(o.averageOrderValue)} />
-        <Stat label="Clients" value={o.customers} href={user.permissions.includes("customers.view") ? "/admin/customers" : undefined} />
-        <Stat label="Produits actifs" value={o.products} hint={`${outOfStock.length} en rupture`} href={user.permissions.includes("products.manage") ? "/admin/products" : undefined} />
-        <Stat
-          label="Retours / avis en attente"
-          value={`${o.pendingReturns} / ${o.pendingReviews}`}
-          tone={o.pendingReturns + o.pendingReviews ? "warn" : undefined}
-          href={user.permissions.includes("returns.manage") ? "/admin/returns" : undefined}
-        />
+        <Stat label="Commandes en cours" value={o.confirmed + o.preparing + o.shipped} hint={`${dt(o.pipeline)} en attente`} href={canOrders ? "/admin/orders?status=CONFIRMED" : undefined} />
+        <Stat label="Chiffre d'affaires (livré)" value={dt(o.revenue)} tone="ok" hint={`${o.delivered} livrée(s)`} />
+        <Stat label="Stock faible / ruptures" value={o.lowStockCount} tone={o.lowStockCount ? "warn" : undefined} hint={`${o.products} produits actifs`} href={canStock ? "/admin/inventory?filter=low" : undefined} />
       </div>
 
-      <Card
-        className="mt-4"
-        title="Ventes"
-        actions={
-          <div className="flex rounded-md border border-neutral-200 p-0.5">
-            {PERIODS.map((p) => (
-              <Link key={p.key} href={`/admin?period=${p.key}`} className={cn("rounded px-2 py-1 text-[12px]", p.key === period ? "bg-neutral-900 text-white" : "text-neutral-600 hover:bg-neutral-100")}>
-                {p.label}
-              </Link>
-            ))}
-          </div>
-        }
-      >
-        <div className="grid gap-6 lg:grid-cols-2">
-          <div>
-            <p className="mb-2 text-[12px] font-medium text-neutral-500">Chiffre d&apos;affaires livré</p>
-            <BarChart data={series.map((s) => ({ label: s.label, value: s.revenue }))} format={(n) => (n >= 1000 ? `${Math.round(n / 1000)}` : String(n))} />
-            <p className="mt-1 text-[11px] text-neutral-400">Montants en DT, par date de commande.</p>
-          </div>
-          <div>
-            <p className="mb-2 text-[12px] font-medium text-neutral-500">Commandes</p>
-            <BarChart data={series.map((s) => ({ label: s.label, value: s.committed, secondary: s.orders }))} primaryLabel="Validées" secondaryLabel="Total reçues" />
-          </div>
-        </div>
-      </Card>
+      <div className="mt-3 flex flex-wrap items-center gap-x-6 gap-y-1 rounded-lg border border-neutral-200 bg-white px-4 py-2.5 text-[13px] text-neutral-600">
+        <span>Total commandes : <strong className="text-neutral-900">{o.totalOrders}</strong></span>
+        <span>Panier moyen : <strong className="text-neutral-900">{dt(o.averageOrderValue)}</strong></span>
+        <span>Clients : <strong className="text-neutral-900">{o.customers}</strong></span>
+        {(o.pendingReturns > 0 || o.pendingReviews > 0) && (
+          <Link href="/admin/returns" className="font-medium text-amber-700 hover:underline">
+            {o.pendingReturns} retour(s) · {o.pendingReviews} avis en attente
+          </Link>
+        )}
+      </div>
 
       <div className="mt-4 grid gap-4 xl:grid-cols-3">
         <Card className="xl:col-span-2" title="Dernières commandes" actions={canOrders && <Link href="/admin/orders" className="text-[12px] text-neutral-500 hover:text-neutral-900">Tout voir →</Link>} bodyClass="p-0">
@@ -148,6 +120,32 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           )}
         </Card>
       </div>
+
+      <Card
+        className="mt-4"
+        title="Ventes"
+        actions={
+          <div className="flex rounded-md border border-neutral-200 p-0.5">
+            {PERIODS.map((p) => (
+              <Link key={p.key} href={`/admin?period=${p.key}`} className={cn("rounded px-2 py-1 text-[12px]", p.key === period ? "bg-neutral-900 text-white" : "text-neutral-600 hover:bg-neutral-100")}>
+                {p.label}
+              </Link>
+            ))}
+          </div>
+        }
+      >
+        <div className="grid gap-6 lg:grid-cols-2">
+          <div>
+            <p className="mb-2 text-[12px] font-medium text-neutral-500">Chiffre d&apos;affaires livré</p>
+            <BarChart data={series.map((s) => ({ label: s.label, value: s.revenue }))} format={(n) => (n >= 1000 ? `${Math.round(n / 1000)}` : String(n))} />
+            <p className="mt-1 text-[11px] text-neutral-400">Montants en DT, par date de commande.</p>
+          </div>
+          <div>
+            <p className="mb-2 text-[12px] font-medium text-neutral-500">Commandes</p>
+            <BarChart data={series.map((s) => ({ label: s.label, value: s.committed, secondary: s.orders }))} primaryLabel="Validées" secondaryLabel="Total reçues" />
+          </div>
+        </div>
+      </Card>
     </>
   );
 }

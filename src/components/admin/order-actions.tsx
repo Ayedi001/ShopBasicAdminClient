@@ -30,23 +30,38 @@ export function OrderStatusActions({ orderId, status, canUpdate, canCancel }: { 
   const { run, busy, errors } = useAction();
   const next = (ORDER_TRANSITIONS[status as OrderStatus] ?? []).filter((s) => (s === "CANCELLED" ? canCancel : canUpdate));
 
-  const submit = () =>
-    run(() => post(`/api/admin/orders/${orderId}/status`, { status: target, note: note || null, cancellationReason: target === "CANCELLED" ? reason : null }), {
-      success: `Statut mis à jour : ${ORDER_STATUS_LABELS[target!]}`,
-      onDone: () => {
-        setTarget(null);
-        setNote("");
-        setReason("");
+  const submit = (statusOverride?: string) => {
+    const nextStatus = statusOverride ?? target;
+    if (!nextStatus) return;
+    return run(
+      () => post(`/api/admin/orders/${orderId}/status`, { status: nextStatus, note: statusOverride ? null : note || null, cancellationReason: nextStatus === "CANCELLED" ? reason : null }),
+      {
+        success: `Statut mis à jour : ${ORDER_STATUS_LABELS[nextStatus]}`,
+        onDone: () => {
+          setTarget(null);
+          setNote("");
+          setReason("");
+        },
       },
-    });
+    );
+  };
 
   return (
     <div className="flex flex-wrap gap-2 print:hidden">
-      {next.map((s) => (
-        <button key={s} type="button" className={s === "CANCELLED" ? "a-btn text-red-700" : "a-btn-primary"} onClick={() => setTarget(s)}>
-          {ACTION_LABELS[s]}
-        </button>
-      ))}
+      {next.map((s) => {
+        const needsModal = s === "CONFIRMED" || s === "CANCELLED";
+        return (
+          <button
+            key={s}
+            type="button"
+            disabled={busy}
+            className={s === "CANCELLED" ? "a-btn text-red-700" : "a-btn-primary"}
+            onClick={() => (needsModal ? setTarget(s) : submit(s))}
+          >
+            {ACTION_LABELS[s]}
+          </button>
+        );
+      })}
       {!next.length && <span className="text-[13px] text-neutral-500">{status === "DELIVERED" || status === "CANCELLED" ? "Commande clôturée." : "Aucune action autorisée pour votre rôle."}</span>}
       <button type="button" className="a-btn" onClick={() => window.print()}>
         <Printer className="h-4 w-4" /> Imprimer
@@ -61,7 +76,7 @@ export function OrderStatusActions({ orderId, status, canUpdate, canCancel }: { 
             <button type="button" className="a-btn" onClick={() => setTarget(null)}>
               Retour
             </button>
-            <button type="button" className={target === "CANCELLED" ? "a-btn-danger" : "a-btn-primary"} disabled={busy || (target === "CANCELLED" && !reason.trim())} onClick={submit}>
+            <button type="button" className={target === "CANCELLED" ? "a-btn-danger" : "a-btn-primary"} disabled={busy || (target === "CANCELLED" && !reason.trim())} onClick={() => submit()}>
               {busy && <Spinner />} Valider
             </button>
           </>

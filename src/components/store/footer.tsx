@@ -56,27 +56,65 @@ export function Footer({ store, nav, t }: { store: StoreSettings; nav: NavCatego
     { href: "/pages/terms", label: t("footer.terms") },
   ];
   return (
-    <footer className="mt-20 bg-brand text-white/80">
-      <div className="container-x grid gap-10 py-14 sm:grid-cols-2 lg:grid-cols-[1.4fr_1fr_1fr_1.3fr]">
+    <footer className="mt-14 bg-brand text-white/80">
+      <div className="container-x grid gap-8 py-10 sm:grid-cols-2 lg:grid-cols-[1.4fr_1fr_1fr]">
         <div>
-          <p className="font-display text-3xl font-semibold uppercase tracking-[0.18em] text-white">{store.name}</p>
-          {store.tagline && <p className="mt-3 max-w-xs text-sm leading-relaxed">{store.tagline}</p>}
-          {socials.length > 0 && (
-            <div className="mt-6">
-              <p className="mb-3 text-[11px] uppercase tracking-widest2 text-white/60">{t("footer.followUs")}</p>
-              <div className="flex gap-2">
-                {socials.map(({ href, icon: Icon, label }) => (
-                  <a key={label} href={safeHref(href)} target="_blank" rel="noopener noreferrer" aria-label={label} className="flex h-10 w-10 items-center justify-center border border-white/25 transition hover:border-white hover:text-white">
-                    <Icon className="h-4 w-4" />
+          <p className="font-display text-2xl font-semibold uppercase tracking-[0.18em] text-white">{store.name}</p>
+          {store.tagline && <p className="mt-2 max-w-xs text-sm leading-relaxed text-white/70">{store.tagline}</p>}
+          <ul className="mt-4 space-y-2 text-sm">
+            {store.phone && (
+              <li>
+                <a href={`tel:${store.phone}`} className="flex items-center gap-2.5 hover:text-white">
+                  <Phone className="h-4 w-4 shrink-0" /> <span dir="ltr">{formatPhone(store.phone)}</span>
+                </a>
+              </li>
+            )}
+            {store.whatsapp && (
+              <li>
+                <a href={`https://wa.me/${whatsappDigits(store.whatsapp)}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2.5 hover:text-white">
+                  <MessageCircle className="h-4 w-4 shrink-0" /> WhatsApp <span dir="ltr">{formatPhone(store.whatsapp)}</span>
+                </a>
+              </li>
+            )}
+            {store.email && (
+              <li>
+                <a href={`mailto:${store.email}`} className="flex items-center gap-2.5 hover:text-white">
+                  <Mail className="h-4 w-4 shrink-0" /> {store.email}
+                </a>
+              </li>
+            )}
+            {store.address && (
+              <li className="flex items-start gap-2.5">
+                <MapPin className="mt-0.5 h-4 w-4 shrink-0" />
+                {store.mapUrl ? (
+                  <a href={safeHref(store.mapUrl)} target="_blank" rel="noopener noreferrer" className="hover:text-white">
+                    {store.address}
                   </a>
-                ))}
-              </div>
+                ) : (
+                  <span>{store.address}</span>
+                )}
+              </li>
+            )}
+            {store.openingHours && (
+              <li className="flex items-start gap-2.5 text-white/70">
+                <Clock className="mt-0.5 h-4 w-4 shrink-0" />
+                <span className="whitespace-pre-line">{store.openingHours}</span>
+              </li>
+            )}
+          </ul>
+          {socials.length > 0 && (
+            <div className="mt-5 flex gap-2">
+              {socials.map(({ href, icon: Icon, label }) => (
+                <a key={label} href={safeHref(href)} target="_blank" rel="noopener noreferrer" aria-label={label} className="flex h-9 w-9 items-center justify-center border border-white/25 transition hover:border-white hover:text-white">
+                  <Icon className="h-4 w-4" />
+                </a>
+              ))}
             </div>
           )}
         </div>
         <div>
-          <p className="mb-4 text-[12px] font-medium uppercase tracking-widest2 text-white">{t("footer.shop")}</p>
-          <ul className="space-y-2.5 text-sm">
+          <p className="mb-3 text-[12px] font-medium uppercase tracking-widest2 text-white">{t("footer.shop")}</p>
+          <ul className="space-y-2 text-sm">
             {nav.map((c) => (
               <li key={c.slug}>
                 <Link href={`/c/${c.slug}`} className="hover:text-white">
@@ -94,6 +132,23 @@ export function Footer({ store, nav, t }: { store: StoreSettings; nav: NavCatego
                 {t("common.onSale")}
               </Link>
             </li>
+            <li>
+              <Link href="/collections" className="hover:text-white">
+                {t("common.collections")}
+              </Link>
+            </li>
+          </ul>
+        </div>
+        <div>
+          <p className="mb-3 text-[12px] font-medium uppercase tracking-widest2 text-white">{t("footer.help")}</p>
+          <ul className="space-y-2 text-sm">
+            {help.map((l) => (
+              <li key={l.href}>
+                <Link href={l.href} className="hover:text-white">
+                  {l.label}
+                </Link>
+              </li>
+            ))}
             {legal.map((l) => (
               <li key={l.href}>
                 <Link href={l.href} className="hover:text-white">
@@ -103,65 +158,9 @@ export function Footer({ store, nav, t }: { store: StoreSettings; nav: NavCatego
             ))}
           </ul>
         </div>
-        <div>
-          <p className="mb-4 text-[12px] font-medium uppercase tracking-widest2 text-white">{t("footer.help")}</p>
-          <ul className="space-y-2.5 text-sm">
-            {help.map((l) => (
-              <li key={l.href}>
-                <Link href={l.href} className="hover:text-white">
-                  {l.label}
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </div>
-        <div>
-          <p className="mb-4 text-[12px] font-medium uppercase tracking-widest2 text-white">{t("footer.store")}</p>
-          <ul className="space-y-3 text-sm">
-            {store.phone && (
-              <li>
-                <a href={`tel:${store.phone}`} className="flex items-center gap-3 hover:text-white">
-                  <Phone className="h-4 w-4 shrink-0" /> <span dir="ltr">{formatPhone(store.phone)}</span>
-                </a>
-              </li>
-            )}
-            {store.whatsapp && (
-              <li>
-                <a href={`https://wa.me/${whatsappDigits(store.whatsapp)}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 hover:text-white">
-                  <MessageCircle className="h-4 w-4 shrink-0" /> WhatsApp <span dir="ltr">{formatPhone(store.whatsapp)}</span>
-                </a>
-              </li>
-            )}
-            {store.email && (
-              <li>
-                <a href={`mailto:${store.email}`} className="flex items-center gap-3 hover:text-white">
-                  <Mail className="h-4 w-4 shrink-0" /> {store.email}
-                </a>
-              </li>
-            )}
-            {store.address && (
-              <li className="flex items-start gap-3">
-                <MapPin className="mt-0.5 h-4 w-4 shrink-0" />
-                {store.mapUrl ? (
-                  <a href={safeHref(store.mapUrl)} target="_blank" rel="noopener noreferrer" className="hover:text-white">
-                    {store.address}
-                  </a>
-                ) : (
-                  <span>{store.address}</span>
-                )}
-              </li>
-            )}
-            {store.openingHours && (
-              <li className="flex items-start gap-3">
-                <Clock className="mt-0.5 h-4 w-4 shrink-0" />
-                <span className="whitespace-pre-line">{store.openingHours}</span>
-              </li>
-            )}
-          </ul>
-        </div>
       </div>
       <div className="border-t border-white/15">
-        <div className="container-x flex flex-col items-center justify-between gap-2 py-5 text-[12px] text-white/60 sm:flex-row">
+        <div className="container-x flex flex-col items-center justify-between gap-2 py-4 text-[12px] text-white/60 sm:flex-row">
           <p>
             © {new Date().getFullYear()} {store.name}. {t("footer.rights")}
           </p>

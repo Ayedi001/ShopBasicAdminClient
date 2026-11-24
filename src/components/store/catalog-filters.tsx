@@ -121,7 +121,7 @@ function FilterBody({ facets, fixed, categorySlug }: { facets: Facets; fixed: Fi
   return (
     <div>
       {!fixed.audience && !fixed.category && (
-        <Group title={t("catalog.audience")}>
+        <Group title={t("catalog.audience")} defaultOpen={list("audience").length > 0}>
           {audiences.map((a) => (
             <Check key={a} label={t(`audience.${a}`)} checked={list("audience").includes(a)} onChange={() => toggle("audience", a)} />
           ))}
@@ -151,7 +151,7 @@ function FilterBody({ facets, fixed, categorySlug }: { facets: Facets; fixed: Fi
           ))}
         </Group>
       )}
-      <Group title={t("catalog.availability")}>
+      <Group title={t("catalog.availability")} defaultOpen={sp.get("stock") === "1" || sp.get("sale") === "1" || sp.get("new") === "1"}>
         <Check label={t("catalog.inStockOnly")} checked={sp.get("stock") === "1"} onChange={() => set("stock", sp.get("stock") === "1" ? null : "1")} />
         <Check label={t("catalog.discountedOnly")} checked={sp.get("sale") === "1"} onChange={() => set("sale", sp.get("sale") === "1" ? null : "1")} />
         <Check label={t("catalog.newOnly")} checked={sp.get("new") === "1"} onChange={() => set("new", sp.get("new") === "1" ? null : "1")} />
@@ -210,6 +210,9 @@ export function CatalogToolbar({ facets, fixed, categorySlug, total, sort, hasQu
 
   useEffect(() => {
     document.body.style.overflow = open ? "hidden" : "";
+    return () => {
+      document.body.style.overflow = "";
+    };
   }, [open]);
 
   const chips: { key: string; value?: string; label: string }[] = [];

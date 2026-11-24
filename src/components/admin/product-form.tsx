@@ -141,72 +141,78 @@ export function ProductForm({ options, productId, initial }: { options: ProductE
           <TextArea label="Conseils d'entretien" value={f.careInstructions} onChange={(e) => set("careInstructions", e.target.value)} error={errors.careInstructions} className="min-h-[60px]" maxLength={2000} />
         </section>
 
-        <section className="a-card space-y-4 p-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-[14px] font-semibold">Composition</h2>
+        <details className="a-card p-4" open={f.materials.length > 0}>
+          <summary className="flex cursor-pointer list-none items-center justify-between text-[14px] font-semibold">
+            <span>Composition (facultatif)</span>
             <span className={cn("text-[12px] font-medium", f.materials.length && materialTotal !== 100 ? "text-red-600" : "text-neutral-500")}>Total : {materialTotal}%</span>
-          </div>
-          <datalist id="materials-list">
-            {options.materials.map((m) => (
-              <option key={m} value={m} />
-            ))}
-          </datalist>
-          {f.materials.map((m, i) => (
-            <div key={i} className="flex items-end gap-2">
-              <TextInput
-                wrapClass="flex-1"
-                label="Matière"
-                list="materials-list"
-                value={m.materialName}
-                onChange={(e) => set("materials", f.materials.map((x, j) => (j === i ? { ...x, materialName: e.target.value } : x)))}
-              />
-              <TextInput
-                wrapClass="w-28"
-                label="%"
-                type="number"
-                min={1}
-                max={100}
-                value={m.percentage || ""}
-                onChange={(e) => set("materials", f.materials.map((x, j) => (j === i ? { ...x, percentage: Number(e.target.value) } : x)))}
-              />
-              <button type="button" className="a-btn mb-px" onClick={() => set("materials", f.materials.filter((_, j) => j !== i))} aria-label="Retirer la matière">
-                <Trash2 className="h-4 w-4" />
-              </button>
-            </div>
-          ))}
-          {errors.materials && <p className="text-[12px] text-red-600">{errors.materials}</p>}
-          {f.materials.length < 10 && (
-            <button type="button" className="a-btn" onClick={() => set("materials", [...f.materials, { materialName: "", percentage: Math.max(0, 100 - materialTotal) }])}>
-              <Plus className="h-4 w-4" /> Ajouter une matière
-            </button>
-          )}
-        </section>
-
-        <section className="a-card space-y-4 p-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-[14px] font-semibold">Traductions</h2>
-            <div className="flex rounded-md border border-neutral-200 p-0.5">
-              {(["ar", "en"] as const).map((l) => (
-                <button key={l} type="button" onClick={() => setLang(l)} className={cn("rounded px-2.5 py-1 text-[12px]", lang === l ? "bg-neutral-900 text-white" : "text-neutral-600")}>
-                  {l === "ar" ? "Arabe" : "Anglais"}
-                </button>
+          </summary>
+          <div className="mt-4 space-y-4">
+            <datalist id="materials-list">
+              {options.materials.map((m) => (
+                <option key={m} value={m} />
               ))}
+            </datalist>
+            {f.materials.map((m, i) => (
+              <div key={i} className="flex items-end gap-2">
+                <TextInput
+                  wrapClass="flex-1"
+                  label="Matière"
+                  list="materials-list"
+                  value={m.materialName}
+                  onChange={(e) => set("materials", f.materials.map((x, j) => (j === i ? { ...x, materialName: e.target.value } : x)))}
+                />
+                <TextInput
+                  wrapClass="w-28"
+                  label="%"
+                  type="number"
+                  min={1}
+                  max={100}
+                  value={m.percentage || ""}
+                  onChange={(e) => set("materials", f.materials.map((x, j) => (j === i ? { ...x, percentage: Number(e.target.value) } : x)))}
+                />
+                <button type="button" className="a-btn mb-px" onClick={() => set("materials", f.materials.filter((_, j) => j !== i))} aria-label="Retirer la matière">
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
+            ))}
+            {errors.materials && <p className="text-[12px] text-red-600">{errors.materials}</p>}
+            {f.materials.length < 10 && (
+              <button type="button" className="a-btn" onClick={() => set("materials", [...f.materials, { materialName: "", percentage: Math.max(0, 100 - materialTotal) }])}>
+                <Plus className="h-4 w-4" /> Ajouter une matière
+              </button>
+            )}
+          </div>
+        </details>
+
+        <details className="a-card p-4">
+          <summary className="cursor-pointer list-none text-[14px] font-semibold">Traductions AR / EN (facultatif)</summary>
+          <div className="mt-4 space-y-4">
+            <div className="flex items-center justify-between">
+              <p className="text-[12px] text-neutral-500">Sans traduction, la version française est affichée.</p>
+              <div className="flex rounded-md border border-neutral-200 p-0.5">
+                {(["ar", "en"] as const).map((l) => (
+                  <button key={l} type="button" onClick={() => setLang(l)} className={cn("rounded px-2.5 py-1 text-[12px]", lang === l ? "bg-neutral-900 text-white" : "text-neutral-600")}>
+                    {l === "ar" ? "Arabe" : "Anglais"}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div dir={lang === "ar" ? "rtl" : "ltr"} className="space-y-3">
+              <TextInput label="Nom" value={tr.name} onChange={(e) => setTr({ name: e.target.value })} maxLength={150} />
+              <TextArea label="Description courte" value={tr.shortDescription} onChange={(e) => setTr({ shortDescription: e.target.value })} className="min-h-[60px]" maxLength={300} />
+              <TextArea label="Description" value={tr.description} onChange={(e) => setTr({ description: e.target.value })} className="min-h-[120px]" maxLength={10000} />
+              <TextArea label="Entretien" value={tr.careInstructions} onChange={(e) => setTr({ careInstructions: e.target.value })} className="min-h-[60px]" maxLength={2000} />
             </div>
           </div>
-          <p className="text-[12px] text-neutral-500">Champs facultatifs : sans traduction, la version française est affichée.</p>
-          <div dir={lang === "ar" ? "rtl" : "ltr"} className="space-y-3">
-            <TextInput label="Nom" value={tr.name} onChange={(e) => setTr({ name: e.target.value })} maxLength={150} />
-            <TextArea label="Description courte" value={tr.shortDescription} onChange={(e) => setTr({ shortDescription: e.target.value })} className="min-h-[60px]" maxLength={300} />
-            <TextArea label="Description" value={tr.description} onChange={(e) => setTr({ description: e.target.value })} className="min-h-[120px]" maxLength={10000} />
-            <TextArea label="Entretien" value={tr.careInstructions} onChange={(e) => setTr({ careInstructions: e.target.value })} className="min-h-[60px]" maxLength={2000} />
-          </div>
-        </section>
+        </details>
 
-        <section className="a-card space-y-3 p-4">
-          <h2 className="text-[14px] font-semibold">Référencement (SEO)</h2>
-          <TextInput label="Titre SEO" value={f.metaTitle} onChange={(e) => set("metaTitle", e.target.value)} hint={`${f.metaTitle.length}/160 · vide = nom du produit`} maxLength={160} error={errors.metaTitle} />
-          <TextArea label="Méta-description" value={f.metaDescription} onChange={(e) => set("metaDescription", e.target.value)} hint={`${f.metaDescription.length}/320 · vide = description courte`} maxLength={320} className="min-h-[60px]" error={errors.metaDescription} />
-        </section>
+        <details className="a-card p-4">
+          <summary className="cursor-pointer list-none text-[14px] font-semibold">Référencement SEO (facultatif)</summary>
+          <div className="mt-3 space-y-3">
+            <TextInput label="Titre SEO" value={f.metaTitle} onChange={(e) => set("metaTitle", e.target.value)} hint={`${f.metaTitle.length}/160 · vide = nom du produit`} maxLength={160} error={errors.metaTitle} />
+            <TextArea label="Méta-description" value={f.metaDescription} onChange={(e) => set("metaDescription", e.target.value)} hint={`${f.metaDescription.length}/320 · vide = description courte`} maxLength={320} className="min-h-[60px]" error={errors.metaDescription} />
+          </div>
+        </details>
       </div>
 
       <div className="space-y-4">
@@ -262,22 +268,24 @@ export function ProductForm({ options, productId, initial }: { options: ProductE
           <TextInput label="Marque" list="brands-list" value={f.brandName} onChange={(e) => set("brandName", e.target.value)} maxLength={80} error={errors.brandName} />
         </section>
 
-        <section className="a-card space-y-3 p-4">
-          <h2 className="text-[14px] font-semibold">Détails</h2>
-          <Select label="Coupe" value={f.fitType} onChange={(e) => set("fitType", e.target.value)} placeholder="Non précisée" options={FIT_TYPES.map((x) => ({ value: x, label: FIT_LABELS[x] }))} />
-          <Select label="Guide des tailles" value={f.sizeChartId} onChange={(e) => set("sizeChartId", e.target.value)} placeholder="Hériter de la catégorie" options={options.sizeCharts.map((c) => ({ value: c.id, label: c.name }))} hint={chartHint} />
-          <div className="grid grid-cols-2 gap-3">
-            <TextInput
-              label="Poids (g)"
-              type="number"
-              min={0}
-              value={f.weightGrams ?? ""}
-              onChange={(e) => set("weightGrams", e.target.value === "" ? null : Math.max(0, Math.round(Number(e.target.value))))}
-              error={errors.weightGrams}
-            />
-            <TextInput label="Pays d'origine" value={f.countryOfOrigin} onChange={(e) => set("countryOfOrigin", e.target.value)} maxLength={80} />
+        <details className="a-card p-4">
+          <summary className="cursor-pointer list-none text-[14px] font-semibold">Détails avancés (facultatif)</summary>
+          <div className="mt-3 space-y-3">
+            <Select label="Coupe" value={f.fitType} onChange={(e) => set("fitType", e.target.value)} placeholder="Non précisée" options={FIT_TYPES.map((x) => ({ value: x, label: FIT_LABELS[x] }))} />
+            <Select label="Guide des tailles" value={f.sizeChartId} onChange={(e) => set("sizeChartId", e.target.value)} placeholder="Hériter de la catégorie" options={options.sizeCharts.map((c) => ({ value: c.id, label: c.name }))} hint={chartHint} />
+            <div className="grid grid-cols-2 gap-3">
+              <TextInput
+                label="Poids (g)"
+                type="number"
+                min={0}
+                value={f.weightGrams ?? ""}
+                onChange={(e) => set("weightGrams", e.target.value === "" ? null : Math.max(0, Math.round(Number(e.target.value))))}
+                error={errors.weightGrams}
+              />
+              <TextInput label="Pays d'origine" value={f.countryOfOrigin} onChange={(e) => set("countryOfOrigin", e.target.value)} maxLength={80} />
+            </div>
           </div>
-        </section>
+        </details>
       </div>
     </form>
   );

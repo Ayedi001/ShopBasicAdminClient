@@ -22,7 +22,7 @@ export function HeroCarousel({ slides }: { slides: HeroSlide[] }) {
   if (!count) return null;
   return (
     <section
-      className="relative h-[72vh] min-h-[460px] w-full overflow-hidden bg-neutral-200 lg:h-[82vh]"
+      className="relative h-[56vh] min-h-[380px] max-h-[560px] w-full overflow-hidden bg-neutral-200"
       aria-roledescription="carousel"
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
