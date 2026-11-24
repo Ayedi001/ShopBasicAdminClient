@@ -8,9 +8,8 @@
  *
  * Usage: npm run test:acceptance
  */
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "../src/server/db";
 
-const prisma = new PrismaClient();
 const base = (process.env.APP_URL ?? "http://localhost:3000").replace(/\/$/, "");
 let failed = 0;
 

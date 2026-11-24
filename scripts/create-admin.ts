@@ -8,11 +8,9 @@
  * Or via env:
  *   SEED_ADMIN_EMAIL / SEED_ADMIN_PASSWORD / SEED_ADMIN_NAME / SEED_ADMIN_PHONE
  */
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "../src/server/db";
 import bcrypt from "bcryptjs";
 import { normalizePhone } from "../src/lib/phone";
-
-const prisma = new PrismaClient();
 
 function arg(name: string) {
   const i = process.argv.indexOf(`--${name}`);

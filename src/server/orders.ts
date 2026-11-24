@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import type { Prisma } from "@prisma/client";
+import type { Prisma } from "@/server/db";
 import { prisma } from "./db";
 import { badRequest, conflict, forbidden, notFound } from "./errors";
 import { buildCartView, getCart } from "./cart";

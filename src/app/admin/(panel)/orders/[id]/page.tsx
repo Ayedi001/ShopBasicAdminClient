@@ -15,7 +15,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
   if (!order) notFound();
   const canUpdate = user.permissions.includes("orders.update");
   const canCancel = user.permissions.includes("orders.cancel");
-  const stockLabel = { HELD: "Réservé (en attente de confirmation)", DEDUCTED: "Déduit du stock", RELEASED: "Réservation libérée", RESTOCKED: "Remis en stock" }[order.stockState] ?? order.stockState;
+  const stockLabel = ({ HELD: "Réservé (en attente de confirmation)", DEDUCTED: "Déduit du stock", RELEASED: "Réservation libérée", RESTOCKED: "Remis en stock" } as Record<string, string>)[order.stockState] ?? order.stockState;
 
   return (
     <>

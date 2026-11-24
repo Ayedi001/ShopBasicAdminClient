@@ -133,7 +133,7 @@ export async function buildCartView(cartId: string | null, locale: string, userI
     if (item.seenPrice !== price.final) {
       await prisma.cartItem.update({ where: { id: item.id }, data: { seenPrice: price.final } });
     }
-    const colorImage = p.images.find((i) => i.colorId && i.colorId === v.colorId) ?? p.images[0];
+    const colorImage = p.images.find((i: { colorId: string | null }) => i.colorId && i.colorId === v.colorId) ?? p.images[0];
     lines.push({
       id: item.id,
       variantId: v.id,

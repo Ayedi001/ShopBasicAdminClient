@@ -43,28 +43,36 @@ async function movement(
 
 /** Hold units for a new pending order. Returns false when not enough stock. */
 export async function holdStock(tx: Tx, variantId: string, qty: number): Promise<boolean> {
-  const n = await tx.$executeRaw`
-    UPDATE "ProductVariant"
-    SET "reserved" = "reserved" + ${qty}, "available" = "available" - ${qty}
-    WHERE "id" = ${variantId} AND "isActive" = true AND "available" >= ${qty}`;
-  return n === 1;
+  const v = await tx.productVariant.findUnique({ where: { id: variantId } });
+  if (!v || !v.isActive || v.available < qty) return false;
+  const res = await tx.productVariant.updateMany({
+    where: { id: variantId, isActive: true, stock: v.stock, reserved: v.reserved, available: v.available },
+    data: { reserved: v.reserved + qty, available: v.available - qty },
+  });
+  return res.count === 1;
 }
 
 /** Release a hold (pending order cancelled). */
 export async function releaseHold(tx: Tx, variantId: string, qty: number) {
-  await tx.$executeRaw`
-    UPDATE "ProductVariant"
-    SET "reserved" = "reserved" - ${qty}, "available" = "available" + ${qty}
-    WHERE "id" = ${variantId} AND "reserved" >= ${qty}`;
+  const v = await tx.productVariant.findUnique({ where: { id: variantId } });
+  if (!v || v.reserved < qty) return;
+  await tx.productVariant.updateMany({
+    where: { id: variantId, reserved: v.reserved, available: v.available },
+    data: { reserved: v.reserved - qty, available: v.available + qty },
+  });
 }
 
 /** Convert a hold into a permanent deduction (order confirmed by the shop). */
 export async function commitHold(tx: Tx, variantId: string, qty: number, orderId: string, actor: Actor) {
-  const n = await tx.$executeRaw`
-    UPDATE "ProductVariant"
-    SET "reserved" = "reserved" - ${qty}, "stock" = "stock" - ${qty}
-    WHERE "id" = ${variantId} AND "reserved" >= ${qty} AND "stock" >= ${qty}`;
-  if (n !== 1) throw conflict("STOCK_INCONSISTENT", "Stock incohérent pour une variante de la commande.");
+  const v = await tx.productVariant.findUnique({ where: { id: variantId } });
+  if (!v || v.reserved < qty || v.stock < qty) {
+    throw conflict("STOCK_INCONSISTENT", "Stock incohérent pour une variante de la commande.");
+  }
+  const res = await tx.productVariant.updateMany({
+    where: { id: variantId, reserved: v.reserved, stock: v.stock },
+    data: { reserved: v.reserved - qty, stock: v.stock - qty },
+  });
+  if (res.count !== 1) throw conflict("STOCK_INCONSISTENT", "Stock incohérent pour une variante de la commande.");
   await movement(tx, variantId, -qty, "ORDER_CONFIRMED", { orderId, actor, reason: "Commande confirmée" });
 }
 
@@ -76,10 +84,12 @@ export async function restock(
   type: StockMovementType,
   opts: { orderId?: string | null; actor: Actor; reason?: string },
 ) {
-  await tx.$executeRaw`
-    UPDATE "ProductVariant"
-    SET "stock" = "stock" + ${qty}, "available" = "available" + ${qty}
-    WHERE "id" = ${variantId}`;
+  const v = await tx.productVariant.findUnique({ where: { id: variantId } });
+  if (!v) return;
+  await tx.productVariant.updateMany({
+    where: { id: variantId, stock: v.stock, available: v.available },
+    data: { stock: v.stock + qty, available: v.available + qty },
+  });
   await movement(tx, variantId, qty, type, opts);
 }
 
@@ -91,11 +101,13 @@ export async function deductDirect(
   type: StockMovementType,
   opts: { orderId?: string | null; actor: Actor; reason?: string },
 ) {
-  const n = await tx.$executeRaw`
-    UPDATE "ProductVariant"
-    SET "stock" = "stock" - ${qty}, "available" = "available" - ${qty}
-    WHERE "id" = ${variantId} AND "available" >= ${qty}`;
-  if (n !== 1) throw conflict("OUT_OF_STOCK", "Stock insuffisant pour la variante de remplacement.");
+  const v = await tx.productVariant.findUnique({ where: { id: variantId } });
+  if (!v || v.available < qty) throw conflict("OUT_OF_STOCK", "Stock insuffisant pour la variante de remplacement.");
+  const res = await tx.productVariant.updateMany({
+    where: { id: variantId, stock: v.stock, available: v.available },
+    data: { stock: v.stock - qty, available: v.available - qty },
+  });
+  if (res.count !== 1) throw conflict("OUT_OF_STOCK", "Stock insuffisant pour la variante de remplacement.");
   await movement(tx, variantId, -qty, type, opts);
 }
 

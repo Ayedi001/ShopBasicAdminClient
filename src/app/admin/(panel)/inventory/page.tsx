@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { Prisma } from "@prisma/client";
+import type { Prisma } from "@/server/db";
 import { Download, Search } from "lucide-react";
 import { adminPage } from "@/server/admin-guard";
 import { prisma } from "@/server/db";

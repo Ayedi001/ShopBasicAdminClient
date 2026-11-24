@@ -1,4 +1,4 @@
-import type { Prisma } from "@prisma/client";
+import type { Prisma } from "@/server/db";
 import { prisma } from "./db";
 import { computePrice, ensurePricingFresh, getActivePromotions, type ActivePromotion } from "./pricing";
 import { localized } from "@/i18n";
@@ -433,7 +433,7 @@ export async function getProductDetail(slug: string, locale: string) {
     shortDescription: tr?.shortDescription || p.shortDescription,
     description: tr?.description || p.description,
     careInstructions: tr?.careInstructions || p.careInstructions,
-    characteristics: (p.characteristics ?? "").split("\n").map((s) => s.trim()).filter(Boolean),
+    characteristics: String(p.characteristics ?? "").split("\n").map((s: string) => s.trim()).filter(Boolean),
     audience: p.audience,
     season: p.season,
     fitType: p.fitType,

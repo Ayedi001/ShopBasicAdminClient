@@ -1,4 +1,4 @@
-import type { Prisma } from "@prisma/client";
+import type { Prisma } from "@/server/db";
 import { api, intParam, parseBody } from "@/server/http";
 import { requireStaff } from "@/server/auth/session";
 import { productSchema } from "@/lib/validation";

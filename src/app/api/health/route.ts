@@ -1,6 +1,7 @@
 import { prisma } from "@/server/db";
 import fs from "node:fs/promises";
 import { uploadRoot } from "@/server/media";
+import { getSupabaseAdmin, isSupabaseStorageEnabled, supabaseBucket } from "@/server/supabase";
 
 export const dynamic = "force-dynamic";
 
@@ -10,15 +11,20 @@ export async function GET() {
   const checks: Record<string, string> = {};
   let ok = true;
   try {
-    await prisma.$queryRaw`SELECT 1`;
+    await prisma.setting.count();
     checks.database = "ok";
   } catch {
     checks.database = "error";
     ok = false;
   }
   try {
-    await fs.mkdir(uploadRoot(), { recursive: true });
-    await fs.access(uploadRoot());
+    if (isSupabaseStorageEnabled()) {
+      const { error } = await getSupabaseAdmin().storage.from(supabaseBucket()).list("", { limit: 1 });
+      if (error) throw error;
+    } else {
+      await fs.mkdir(uploadRoot(), { recursive: true });
+      await fs.access(uploadRoot());
+    }
     checks.storage = "ok";
   } catch {
     checks.storage = "error";

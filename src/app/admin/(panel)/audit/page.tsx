@@ -2,7 +2,7 @@ import Link from "next/link";
 import { adminPage } from "@/server/admin-guard";
 import { prisma, icontains } from "@/server/db";
 import { Card, Empty, PageHeader, Pagination, fdatetime } from "@/components/admin/parts";
-import type { Prisma } from "@prisma/client";
+import type { Prisma } from "@/server/db";
 
 const PAGE_SIZE = 40;
 
