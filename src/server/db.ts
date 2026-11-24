@@ -166,20 +166,22 @@ async function fetchRawRows(meta: ModelMeta, where?: Record<string, any>): Promi
   return filterRows(meta, rows, expanded);
 }
 
-async function filterRows(meta: ModelMeta, rows: Record<string, any>[], where: Record<string, any>): Promise<Record<string, any>[]> {
+async function filterRows(
+  meta: ModelMeta,
+  rows: Record<string, any>[],
+  where: Record<string, any>,
+  tableCache = new Map<string, Record<string, any>[]>(),
+): Promise<Record<string, any>[]> {
   if (!rows.length) return [];
   const expanded = expandUniqueWhere(meta, where);
-  const relCache = new Map<string, Record<string, any>[]>();
 
-  const loadRelAll = async (relName: string) => {
-    if (relCache.has(relName)) return relCache.get(relName)!;
-    const rel = meta.relations[relName];
-    const target = DB_SCHEMA[rel.target];
+  const loadTableAll = async (target: ModelMeta) => {
+    if (tableCache.has(target.table)) return tableCache.get(target.table)!;
     const sb = getSupabaseAdmin();
     const { data, error } = await sb.from(target.table).select("*");
     if (error) throw mapPgError(error);
     const hydrated = (data ?? []).map((r: any) => hydrateRow(target, r));
-    relCache.set(relName, hydrated);
+    tableCache.set(target.table, hydrated);
     return hydrated;
   };
 
@@ -208,7 +210,7 @@ async function filterRows(meta: ModelMeta, rows: Record<string, any>[], where: R
       } else if (k in meta.relations) {
         const rel = meta.relations[k];
         const target = DB_SCHEMA[rel.target];
-        const allTarget = await loadRelAll(k);
+        const allTarget = await loadTableAll(target);
         if (rel.fk) {
           const parentVal = row[rel.fk];
           const refKey = rel.ref || "id";
@@ -220,7 +222,7 @@ async function filterRows(meta: ModelMeta, rows: Record<string, any>[], where: R
           } else {
             if (!related) return false;
             const inner = "is" in v ? v.is : v;
-            const ok = (await filterRows(target, [related], inner)).length > 0;
+            const ok = (await filterRows(target, [related], inner, tableCache)).length > 0;
             if (!ok) return false;
           }
         } else {
@@ -229,15 +231,15 @@ async function filterRows(meta: ModelMeta, rows: Record<string, any>[], where: R
           const children = allTarget.filter((t) => t[invFk] === row[invRef]);
           if (rel.isList) {
             if ("some" in v) {
-              const matched = await filterRows(target, children, v.some);
+              const matched = await filterRows(target, children, v.some, tableCache);
               if (matched.length === 0) return false;
             }
             if ("every" in v) {
-              const matched = await filterRows(target, children, v.every);
+              const matched = await filterRows(target, children, v.every, tableCache);
               if (matched.length !== children.length) return false;
             }
             if ("none" in v) {
-              const matched = await filterRows(target, children, v.none);
+              const matched = await filterRows(target, children, v.none, tableCache);
               if (matched.length > 0) return false;
             }
           } else {
@@ -248,7 +250,7 @@ async function filterRows(meta: ModelMeta, rows: Record<string, any>[], where: R
               return false;
             } else {
               const inner = "is" in v ? v.is : v;
-              if ((await filterRows(target, [child], inner)).length === 0) return false;
+              if ((await filterRows(target, [child], inner, tableCache)).length === 0) return false;
             }
           }
         }
