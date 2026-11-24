@@ -64,7 +64,7 @@ npx dotenv -e .env.production.local -- npm run admin:create -- --email you@shop.
 
 Without seeding (or `admin:create`), the site builds but the catalog/admin login will be empty.
 
-**Uploads:** product images written to disk do not persist on Vercel’s serverless filesystem. Use demo seed images carefully, or add Blob/S3 later.
+**Uploads (Supabase Storage):** Product and banner uploads automatically use **Supabase Storage** when `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are configured (default bucket: `SUPABASE_STORAGE_BUCKET="media"`, set to **Public**). When unset locally, uploads fall back to `./storage/uploads`.
 
 ## Scripts
 

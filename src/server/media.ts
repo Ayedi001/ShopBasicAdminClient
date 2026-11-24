@@ -3,11 +3,15 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import sharp from "sharp";
 import { badRequest } from "./errors";
+import { getSupabaseAdmin, isSupabaseStorageEnabled, supabaseBucket, supabasePublicUrl } from "./supabase";
 
 /**
- * Local-disk media storage. Files live in UPLOAD_DIR (outside the build
- * output) and are served by src/app/media/[...path]/route.ts. To move to S3 /
- * Cloudinary, re-implement putFile/removeFiles and keep the same keys.
+ * Media storage with automatic Supabase Storage support.
+ * - When SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY are set, files are uploaded
+ *   to the configured Supabase Storage bucket (default: "media") and served via
+ *   public Supabase CDN URLs (persistent on Vercel).
+ * - Otherwise, files fall back to local disk in UPLOAD_DIR and are served by
+ *   src/app/media/[...path]/route.ts.
  */
 
 export const uploadRoot = () => path.resolve(process.env.UPLOAD_DIR ?? "./storage/uploads");
@@ -29,10 +33,23 @@ export type StoredMedia = {
   height: number | null;
 };
 
-async function putFile(relPath: string, data: Buffer) {
+async function putFile(relPath: string, data: Buffer, contentType: string) {
+  if (isSupabaseStorageEnabled()) {
+    const { error } = await getSupabaseAdmin()
+      .storage.from(supabaseBucket())
+      .upload(relPath, data, { contentType, upsert: true, cacheControl: "31536000" });
+    if (error) {
+      throw badRequest("UPLOAD_FAILED", `Échec de l'envoi vers Supabase Storage : ${error.message}`);
+    }
+    return;
+  }
   const abs = path.join(uploadRoot(), relPath);
   await fs.mkdir(path.dirname(abs), { recursive: true });
   await fs.writeFile(abs, data);
+}
+
+function mediaUrl(relPath: string): string {
+  return isSupabaseStorageEnabled() ? supabasePublicUrl(relPath) : `/media/${relPath}`;
 }
 
 function newKey(folder: MediaFolder, sub?: string) {
@@ -66,14 +83,14 @@ export async function saveImage(data: Buffer, folder: MediaFolder, sub?: string)
       .resize({ width, withoutEnlargement: true })
       .webp({ quality: suffix === "sm" ? 74 : 82 })
       .toBuffer({ resolveWithObject: true });
-    await putFile(`${key}-${suffix}.webp`, out);
+    await putFile(`${key}-${suffix}.webp`, out, "image/webp");
     if (suffix === "lg") lgInfo = info;
   }
   return {
     kind: "IMAGE",
     storageKey: key,
-    url: `/media/${key}-lg.webp`,
-    thumbUrl: `/media/${key}-sm.webp`,
+    url: mediaUrl(`${key}-lg.webp`),
+    thumbUrl: mediaUrl(`${key}-sm.webp`),
     width: lgInfo?.width ?? null,
     height: lgInfo?.height ?? null,
   };
@@ -90,8 +107,9 @@ export async function saveVideo(data: Buffer, folder: MediaFolder, sub?: string)
   const ext = detectVideo(data);
   if (!ext) throw badRequest("INVALID_VIDEO", "Formats vidéo acceptés : MP4, WebM");
   const key = newKey(folder, sub);
-  await putFile(`${key}.${ext}`, data);
-  return { kind: "VIDEO", storageKey: key, url: `/media/${key}.${ext}`, thumbUrl: `/media/${key}.${ext}`, width: null, height: null };
+  await putFile(`${key}.${ext}`, data, ext === "mp4" ? "video/mp4" : "video/webm");
+  const url = mediaUrl(`${key}.${ext}`);
+  return { kind: "VIDEO", storageKey: key, url, thumbUrl: url, width: null, height: null };
 }
 
 export async function saveUpload(file: File, folder: MediaFolder, sub?: string, allowVideo = false): Promise<StoredMedia> {
@@ -101,7 +119,12 @@ export async function saveUpload(file: File, folder: MediaFolder, sub?: string, 
 }
 
 export async function removeMedia(storageKey: string) {
-  if (!storageKey || storageKey.includes("..")) return;
+  if (!storageKey || storageKey.includes("..") || storageKey.startsWith("public/")) return;
+  if (isSupabaseStorageEnabled()) {
+    const candidates = [`${storageKey}-sm.webp`, `${storageKey}-md.webp`, `${storageKey}-lg.webp`, `${storageKey}.mp4`, `${storageKey}.webm`];
+    await getSupabaseAdmin().storage.from(supabaseBucket()).remove(candidates).catch(() => undefined);
+    return;
+  }
   const dir = path.join(uploadRoot(), path.dirname(storageKey));
   const base = path.basename(storageKey);
   try {
