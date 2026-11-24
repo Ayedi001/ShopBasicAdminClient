@@ -7,6 +7,7 @@ import sharp from "sharp";
 import { COLLECTIONS, COLORS, CATEGORIES, MATERIALS, PRODUCTS, REGIONS, SIZES, SIZE_CHARTS, type SeedProduct } from "./seed/data";
 import { PAGES } from "./seed/content";
 import { renderGarment } from "./seed/garments";
+import { seedFeaturedCatalog } from "./seed/featured";
 import { saveImage } from "../src/server/media";
 import { slugify } from "../src/lib/utils";
 import { recomputeAllPricing } from "../src/server/pricing";
@@ -603,6 +604,9 @@ async function main() {
     await seedDemo(charts);
   } else if (DEMO) {
     console.log("ℹ Products already exist — demo catalog not re-created.");
+  }
+  if (DEMO) {
+    await seedFeaturedCatalog(prisma);
   }
   await recomputeAllPricing();
   console.log("✔ Seed complete");
