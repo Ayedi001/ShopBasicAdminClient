@@ -338,14 +338,16 @@ async function applyIncludeAndSelect(
       const refKey = rel.ref || "id";
       const fkVals = [...new Set(result.map((r) => r[rel.fk!]).filter((x) => x != null))];
       let relatedRows: Record<string, any>[] = [];
+      let refIds: any[] = [];
       if (fkVals.length) {
         const { data, error } = await sb.from(target.table).select("*").in(refKey, fkVals);
         if (error) throw mapPgError(error);
         relatedRows = (data ?? []).map((x: any) => hydrateRow(target, x));
         if (relOpts.where) relatedRows = await filterRows(target, relatedRows, relOpts.where);
+        refIds = relatedRows.map((x) => x[refKey]);
         relatedRows = await applyIncludeAndSelect(target, relatedRows, relOpts.include, relOpts.select);
       }
-      const byKey = new Map(relatedRows.map((x) => [x[refKey], x]));
+      const byKey = new Map(relatedRows.map((x, idx) => [refIds[idx], x]));
       for (const r of result) {
         r[k] = r[rel.fk!] != null ? byKey.get(r[rel.fk!]) ?? null : null;
       }
@@ -354,6 +356,7 @@ async function applyIncludeAndSelect(
       const invRef = rel.inverseRef || "id";
       const parentIds = [...new Set(result.map((r) => r[invRef]).filter((x) => x != null))];
       let childRows: Record<string, any>[] = [];
+      let childPids: any[] = [];
       if (parentIds.length) {
         let q = sb.from(target.table).select("*").in(invFk, parentIds);
         if (relOpts.where) q = applySimpleFilters(q, target, expandUniqueWhere(target, relOpts.where));
@@ -362,13 +365,14 @@ async function applyIncludeAndSelect(
         childRows = (data ?? []).map((x: any) => hydrateRow(target, x));
         if (relOpts.where) childRows = await filterRows(target, childRows, relOpts.where);
         if (relOpts.orderBy) childRows = sortRows(childRows, relOpts.orderBy);
+        childPids = childRows.map((c) => c[invFk]);
         childRows = await applyIncludeAndSelect(target, childRows, relOpts.include, relOpts.select);
       }
       const grouped = new Map<any, Record<string, any>[]>();
-      for (const c of childRows) {
-        const pid = c[invFk];
+      for (let idx = 0; idx < childRows.length; idx++) {
+        const pid = childPids[idx];
         const arr = grouped.get(pid) ?? [];
-        arr.push(c);
+        arr.push(childRows[idx]);
         grouped.set(pid, arr);
       }
       for (const r of result) {
